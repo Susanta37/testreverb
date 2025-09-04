@@ -14,14 +14,15 @@ use Illuminate\Queue\SerializesModels;
 class Tutorial implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
-    public string $message="Websocket is sending data without refershing";
+    // public string $message="Websocket is sending data without refershing";
+    public string $message;
 
     /**
      * Create a new event instance.
      */
-    public function __construct()
+    public function __construct(string $message)
     {
-        //
+       $this->message = $message;
     }
 
     /**

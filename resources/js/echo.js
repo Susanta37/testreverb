@@ -13,6 +13,6 @@ window.Echo = new Echo({
     enabledTransports: ['ws', 'wss'],
 });
 
-window.Echo.channel("test").listen("Tutorial",(event)=>{
-console.log('event', event)
-});
+// window.Echo.channel("test").listen("Tutorial",(event)=>{
+// console.log('event', event)
+// });
