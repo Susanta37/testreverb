@@ -1,6 +1,7 @@
 <?php
 
 use App\Events\Tutorial;
+use App\Http\Controllers\PriceController;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
@@ -30,12 +31,17 @@ Route::get('/graph', function () {
 });
 
 
-Route::post('/update-price', function () {
-    $price = request()->input('price');
-    \Illuminate\Support\Facades\Log::info('Broadcasting price: ' . $price);
-    broadcast(new Tutorial('Price: ' . $price));
-    return response()->json(['status' => 'Price broadcasted']);
-});
+// Route::post('/update-price', function () {
+//     $price = request()->input('price');
+//     \Illuminate\Support\Facades\Log::info('Broadcasting price: ' . $price);
+//     broadcast(new Tutorial('Price: ' . $price));
+//     return response()->json(['status' => 'Price broadcasted']);
+// });
+
+Route::post('/update-price', [PriceController::class, 'updatePrice']);
+Route::post('/send-random', [PriceController::class, 'sendRandom']);
+
+Route::get('/prices', [PriceController::class, 'getPrices']);
 
 Route::get('/chartcontroller',function (){
     return view ('charts');

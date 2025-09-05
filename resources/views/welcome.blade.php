@@ -19,11 +19,18 @@
             </style>
         @endif
     </head>
-    <<body class="bg-[#FDFDFC] dark:bg-[#ffffff] text-[#1b1b18] flex p-6 lg:p-8 items-center lg:justify-center min-h-screen flex-col">
+   <body class="bg-[#FDFDFC] dark:bg-[#ffffff] text-[#1b1b18] flex p-6 lg:p-8 items-center lg:justify-center min-h-screen flex-col">
     <div id="app" class="w-full max-w-4xl">
-        <h1 class="text-black text-3xl mb-4">WebSocket Message</h1>
-        <div class="text-black text-lg mb-6" id="message">Waiting for message...</div>
-        <canvas id="priceChart" class="max-w-full"></canvas>
+        <h1 class="text-white text-3xl mb-4">WebSocket Message</h1>
+        <div class="text-white text-lg mb-6" id="message">Waiting for message...</div>
+        <canvas id="priceChart" class="max-w-full mb-6"></canvas>
+        <div class="space-x-2 mb-4">
+            <button onclick="loadPrices('today')" class="px-4 py-2 bg-gray-500 text-white rounded">Today</button>
+            <button onclick="loadPrices('1m')" class="px-4 py-2 bg-gray-500 text-white rounded">1 Month</button>
+            <button onclick="loadPrices('6m')" class="px-4 py-2 bg-gray-500 text-white rounded">6 Months</button>
+            <button onclick="loadPrices('1y')" class="px-4 py-2 bg-gray-500 text-white rounded">1 Year</button>
+            <button onclick="loadPrices('total')" class="px-4 py-2 bg-gray-500 text-white rounded">Total</button>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -39,18 +46,21 @@
                 datasets: [{
                     label: 'Price/Random Data',
                     data: priceData,
-                    borderColor: '#F53003', // Tailwind's text-[#F53003]
+                    borderColor: '#F53003',
                     backgroundColor: 'rgba(245, 48, 3, 0.2)',
                     fill: false,
-                    tension: 0.1
+                    tension: 0.5
                 }]
             },
             options: {
+                animation: {
+                    duration: 500,
+                    easing: 'easeInOutQuad'
+                },
                 scales: {
                     y: {
-                        beginAtZero: false,
-                        suggestedMin: 0,
-                        suggestedMax: 150,
+                        min: 0,
+                        max: 100,
                         title: {
                             display: true,
                             text: 'Value',
@@ -67,9 +77,7 @@
                 },
                 plugins: {
                     legend: {
-                        labels: {
-                            color: '#fff'
-                        }
+                        labels: { color: '#fff' }
                     }
                 }
             }
@@ -85,7 +93,7 @@
                 }
 
                 // Extract numeric value from the message
-                const value = parseFloat(event.message.match(/\d+(\.\d+)?/)?.[0]);
+                const value = parseInt(event.message.match(/\d+/)[0]);
                 if (!isNaN(value)) {
                     // Update chart
                     priceData.push(value);
@@ -102,6 +110,23 @@
             .subscribed(() => {
                 console.log('Subscribed to test channel');
             });
+
+        function loadPrices(range) {
+            fetch(`/prices?range=${range}`)
+                .then(response => response.json())
+                .then(data => {
+                    chart.data.datasets[0].data = data.prices;
+                    chart.data.labels = data.labels;
+                    chart.update();
+                })
+                .catch(error => {
+                    console.error('Error loading prices:', error);
+                    document.getElementById('message').innerText = 'Error loading prices';
+                });
+        }
+
+        // Load today's prices on page load
+        loadPrices('today');
     </script>
 </body>
 </html>

@@ -23,6 +23,13 @@
             <input id="maxPrice" type="number" min="0" value="60" class="border px-2 py-1 mr-4">
             <button onclick="startSimulation()" class="px-4 py-2 bg-green-500 text-white rounded">Confirm</button>
         </div>
+        <div class="space-x-2 mb-4">
+            <button onclick="loadPrices('today')" class="px-4 py-2 bg-gray-500 text-white rounded">Today</button>
+            <button onclick="loadPrices('1m')" class="px-4 py-2 bg-gray-500 text-white rounded">1 Month</button>
+            <button onclick="loadPrices('6m')" class="px-4 py-2 bg-gray-500 text-white rounded">6 Months</button>
+            <button onclick="loadPrices('1y')" class="px-4 py-2 bg-gray-500 text-white rounded">1 Year</button>
+            <button onclick="loadPrices('total')" class="px-4 py-2 bg-gray-500 text-white rounded">Total</button>
+        </div>
         <div id="status" class="mb-2"></div>
         <div id="timer" class="mb-2"></div>
         <div id="direction" class="mb-2"></div>
@@ -32,7 +39,7 @@
     <script>
         // Initialize Chart.js
         const ctx = document.getElementById('priceChart').getContext('2d');
-        let price = 40; // Starting price
+        let price = 40;
         const priceData = [price];
         const labels = [new Date().toLocaleTimeString()];
         let minPrice = 20;
@@ -48,18 +55,18 @@
                     borderColor: '#F53003',
                     backgroundColor: 'rgba(245, 48, 3, 0.2)',
                     fill: false,
-                    tension: 0.6 // Curvier lines
+                    tension: 0.5
                 }]
             },
             options: {
                 animation: {
-                    duration: 500, // Smooth transitions
+                    duration: 500,
                     easing: 'easeInOutQuad'
                 },
                 scales: {
                     y: {
-                        min: 0, // Fixed bounds to prevent zooming
-                        max: 100, // Default max, updated on simulation start
+                        min: 0,
+                        max: 100,
                         title: { display: true, text: 'Price' }
                     },
                     x: {
@@ -85,7 +92,7 @@
             } else if (direction === 'down') {
                 price -= 10;
             }
-            price = Math.max(minPrice, Math.min(maxPrice, Math.round(price))); // Ensure integer
+            price = Math.max(minPrice, Math.min(maxPrice, Math.round(price)));
 
             // Update direction
             const directionElement = document.getElementById('direction');
@@ -135,7 +142,7 @@
 
         let simulationInterval;
         let timerInterval;
-        let remainingTime = 300; // 5 minutes in seconds
+        let remainingTime = 300;
 
         function startSimulation() {
             const statusElement = document.getElementById('status');
@@ -150,13 +157,13 @@
                 return;
             }
 
-            // Hide input fields
-            document.getElementById('simulationInputs').classList.add('hidden');
-
             // Update y-axis bounds
             chart.options.scales.y.min = minPrice - 10;
             chart.options.scales.y.max = maxPrice + 10;
             chart.update();
+
+            // Hide input fields
+            document.getElementById('simulationInputs').classList.add('hidden');
 
             statusElement.innerText = 'Simulation started';
 
@@ -228,6 +235,23 @@
             timerElement.innerText = '';
             remainingTime = 300;
         }
+
+        function loadPrices(range) {
+            fetch(`/prices?range=${range}`)
+                .then(response => response.json())
+                .then(data => {
+                    chart.data.datasets[0].data = data.prices;
+                    chart.data.labels = data.labels;
+                    chart.update();
+                })
+                .catch(error => {
+                    console.error('Error loading prices:', error);
+                    document.getElementById('status').innerText = 'Error loading prices';
+                });
+        }
+
+        // Load today's prices on page load
+        loadPrices('today');
     </script>
 </body>
 </html>
