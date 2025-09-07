@@ -1,760 +1,672 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="csrf-token" content="{{ csrf_token() }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Price Graph - Trading Interface</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Vite Assets -->
+    @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @else
+        <!-- Fallback for when Vite is not running - Load Echo manually -->
+        <script src="https://cdn.jsdelivr.net/npm/laravel-echo@1.15.3/dist/echo.iife.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/pusher-js@8.4.0-rc2/dist/web/pusher.min.js"></script>
+        <script>
+            // Initialize Echo manually when Vite is not available
+            if (typeof window.Echo === 'undefined') {
+                window.Echo = new Echo({
+                    broadcaster: 'reverb',
+                    key: 'zpfmrgpl3p0bnd1zsewy',
+                    wsHost: 'localhost',
+                    wsPort: 4010,
+                    wssPort: 4010,
+                    forceTLS: false,
+                    enabledTransports: ['ws', 'wss'],
+                });
+                console.log('✅ Echo initialized manually (fallback mode)');
+            }
+        </script>
+    @endif
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-        <title>TradingView Pro - {{ config('app.name', 'Laravel') }}</title>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            padding: 20px;
+        }
 
-        <!-- Fonts -->
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-        
-        <!-- Chart.js -->
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        
-        <!-- Styles / Scripts -->
-        @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-            @vite(['resources/css/app.css', 'resources/js/app.js'])
-        @else
-            <style>
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
 
-                body {
-                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-                    background: linear-gradient(135deg, #0d1421 0%, #1a202c 100%);
-                    color: #ffffff;
-                    min-height: 100vh;
-                    overflow-x: hidden;
-                }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
 
-                .trading-container {
-                    min-height: 100vh;
-                    background: linear-gradient(135deg, #0d1421 0%, #1a202c 100%);
-                    padding: 20px;
-                }
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #60a5fa 0%, #34d399 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
 
-                .header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 30px;
-                    padding: 20px 30px;
-                    background: rgba(255, 255, 255, 0.05);
-                    border-radius: 12px;
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                    backdrop-filter: blur(10px);
-                }
+        .price-display {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
 
-                .header h1 {
-                    font-size: 28px;
-                    font-weight: 700;
-                    background: linear-gradient(135deg, #60a5fa 0%, #34d399 100%);
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                    background-clip: text;
-                }
+        .chart-container {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+        }
 
-                .price-info {
-                    display: flex;
-                    align-items: center;
-                    gap: 20px;
-                }
+        .chart-wrapper {
+            position: relative;
+            height: 400px;
+            margin-bottom: 20px;
+        }
 
-                .current-price {
-                    font-size: 32px;
-                    font-weight: 700;
-                    color: #22c55e;
-                }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
 
-                .price-change {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    padding: 8px 16px;
-                    border-radius: 8px;
-                    font-weight: 600;
-                    font-size: 14px;
-                }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
 
-                .price-change.positive {
-                    background: rgba(34, 197, 94, 0.2);
-                    color: #22c55e;
-                }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
 
-                .price-change.negative {
-                    background: rgba(239, 68, 68, 0.2);
-                    color: #ef4444;
-                }
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
 
-                .chart-container {
-                    background: rgba(255, 255, 255, 0.05);
-                    border-radius: 16px;
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                    padding: 30px;
-                    margin-bottom: 30px;
-                    backdrop-filter: blur(10px);
-                }
+        .btn-secondary {
+            background: rgba(100, 116, 139, 0.3);
+        }
 
-                .chart-controls {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 25px;
-                    flex-wrap: wrap;
-                    gap: 20px;
-                }
+        .btn-secondary.active {
+            background: linear-gradient(135deg, #60a5fa 0%, #34d399 100%);
+        }
 
-                .time-filters {
-                    display: flex;
-                    gap: 8px;
-                    background: rgba(255, 255, 255, 0.05);
-                    padding: 6px;
-                    border-radius: 10px;
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                }
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 15px 25px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            flex-wrap: wrap;
+            gap: 15px;
+        }
 
-                .time-btn {
-                    padding: 10px 20px;
-                    border: none;
-                    background: transparent;
-                    color: #94a3b8;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-weight: 500;
-                    font-size: 13px;
-                    transition: all 0.3s ease;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                }
+        .status-item {
+            text-align: center;
+        }
 
-                .time-btn:hover {
-                    background: rgba(255, 255, 255, 0.1);
-                    color: #ffffff;
-                }
+        .status-label {
+            font-size: 12px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
 
-                .time-btn.active {
-                    background: linear-gradient(135deg, #60a5fa 0%, #34d399 100%);
-                    color: #ffffff;
-                    box-shadow: 0 4px 15px rgba(96, 165, 250, 0.3);
-                }
+        .status-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ffffff;
+        }
 
-                .chart-filters {
-                    display: flex;
-                    gap: 15px;
-                    align-items: center;
-                }
+        .direction {
+            font-size: 18px;
+            font-weight: 600;
+        }
 
-                .filter-group {
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                }
+        .direction.up {
+            color: #10b981;
+        }
 
-                .filter-group label {
-                    color: #94a3b8;
-                    font-size: 13px;
-                    font-weight: 500;
-                }
+        .direction.down {
+            color: #ef4444;
+        }
 
-                .filter-input, .filter-select {
-                    background: rgba(255, 255, 255, 0.05);
-                    border: 1px solid rgba(255, 255, 255, 0.2);
-                    border-radius: 6px;
-                    padding: 8px 12px;
-                    color: #ffffff;
-                    font-size: 13px;
-                    min-width: 100px;
-                }
+        .websocket-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
 
-                .filter-input:focus, .filter-select:focus {
-                    outline: none;
-                    border-color: #60a5fa;
-                    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
-                }
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #22c55e;
+            animation: pulse 2s infinite;
+        }
 
-                .chart-wrapper {
-                    position: relative;
-                    height: 500px;
-                    background: rgba(0, 0, 0, 0.2);
-                    border-radius: 12px;
-                    overflow: hidden;
-                }
+        .status-indicator.disconnected {
+            background: #ef4444;
+        }
 
-                .status-bar {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    background: rgba(255, 255, 255, 0.05);
-                    border-radius: 12px;
-                    padding: 20px 30px;
-                    margin-bottom: 20px;
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
 
-                .status-item {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    gap: 5px;
-                }
-
-                .status-label {
-                    font-size: 12px;
-                    color: #94a3b8;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                    font-weight: 500;
-                }
-
-                .status-value {
-                    font-size: 16px;
-                    font-weight: 600;
-                    color: #ffffff;
-                }
-
-                .websocket-status {
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                    padding: 12px 20px;
-                    background: rgba(255, 255, 255, 0.05);
-                    border-radius: 8px;
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                }
-
-                .status-indicator {
-                    width: 10px;
-                    height: 10px;
-                    border-radius: 50%;
-                    background: #22c55e;
-                    animation: pulse 2s infinite;
-                }
-
-                .status-indicator.disconnected {
-                    background: #ef4444;
-                }
-
-                @keyframes pulse {
-                    0%, 100% { opacity: 1; }
-                    50% { opacity: 0.5; }
-                }
-
-                .loading {
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    height: 400px;
-                    color: #94a3b8;
-                    font-size: 16px;
-                }
-
-                .spinner {
-                    width: 30px;
-                    height: 30px;
-                    border: 3px solid rgba(255, 255, 255, 0.1);
-                    border-top: 3px solid #60a5fa;
-                    border-radius: 50%;
-                    animation: spin 1s linear infinite;
-                    margin-right: 10px;
-                }
-
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-
-                @media (max-width: 768px) {
-                    .header {
-                        flex-direction: column;
-                        gap: 15px;
-                        padding: 15px;
-                    }
-
-                    .price-info {
-                        flex-direction: column;
-                        gap: 10px;
-                    }
-
-                    .chart-controls {
-                        flex-direction: column;
-                        align-items: stretch;
-                    }
-
-                    .time-filters {
-                        justify-content: center;
-                    }
-
-                    .chart-filters {
-                        justify-content: center;
-                        flex-wrap: wrap;
-                    }
-
-                    .status-bar {
-                        flex-direction: column;
-                        gap: 15px;
-                    }
-                }
-            </style>
-        @endif
-    </head>
-    <body>
-        <div class="trading-container">
-            <!-- Header -->
-            <header class="header">
-                <h1>TradingView Pro</h1>
-                <div class="price-info">
-                    <div class="current-price" id="currentPrice">$42.50</div>
-                    <div class="price-change positive" id="priceChange">
-                        <span>+2.5%</span>
-                        <span>↗</span>
-                    </div>
-                    <div class="websocket-status">
-                        <div class="status-indicator" id="wsIndicator"></div>
-                        <span id="wsStatus">Connected</span>
-                    </div>
-                </div>
-            </header>
-
-            <!-- Chart Section -->
-            <div class="chart-container">
-                <!-- Chart Controls -->
-                <div class="chart-controls">
-                    <div class="time-filters">
-                        <button class="time-btn" onclick="loadPrices('1m')" data-range="1m">1M</button>
-                        <button class="time-btn" onclick="loadPrices('1w')" data-range="1w">1W</button>
-                        <button class="time-btn" onclick="loadPrices('6m')" data-range="6m">6M</button>
-                        <button class="time-btn active" onclick="loadPrices('1y')" data-range="1y">1Y</button>
-                        <button class="time-btn" onclick="loadPrices('5y')" data-range="5y">5Y</button>
-                        <button class="time-btn" onclick="loadPrices('total')" data-range="total">ALL</button>
-                    </div>
-                    
-                    <div class="chart-filters">
-                        <div class="filter-group">
-                            <label>Min Price:</label>
-                            <input type="number" class="filter-input" id="minPriceFilter" placeholder="Auto" min="0">
-                        </div>
-                        <div class="filter-group">
-                            <label>Max Price:</label>
-                            <input type="number" class="filter-input" id="maxPriceFilter" placeholder="Auto" min="0">
-                        </div>
-                        <div class="filter-group">
-                            <label>Interval:</label>
-                            <select class="filter-select" id="intervalFilter">
-                                <option value="all">All Data</option>
-                                <option value="1min">1 Minute</option>
-                                <option value="5min">5 Minutes</option>
-                                <option value="1hour">1 Hour</option>
-                                <option value="1day">1 Day</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Chart Wrapper -->
-                <div class="chart-wrapper">
-                    <canvas id="priceChart"></canvas>
-                    <div class="loading" id="chartLoading" style="display: none;">
-                        <div class="spinner"></div>
-                        Loading chart data...
-                    </div>
-                </div>
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+            }
+            
+            .btn-group {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .status-bar {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Price Graph - Trading Interface</h1>
+            <div class="price-display">
+                Current Price: <span id="currentPriceDisplay">$40.00</span>
+                <span id="direction" class="direction">-</span>
             </div>
+            <div class="websocket-status">
+                <div class="status-indicator" id="wsIndicator"></div>
+                <span id="wsStatus">Connecting...</span>
+            </div>
+        </div>
 
-            <!-- Status Bar -->
-            <div class="status-bar">
-                <div class="status-item">
-                    <span class="status-label">Last Update</span>
-                    <span class="status-value" id="lastUpdate">--</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Volume</span>
-                    <span class="status-value" id="volume">--</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">High (24h)</span>
-                    <span class="status-value" id="high24h">--</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Low (24h)</span>
-                    <span class="status-value" id="low24h">--</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Data Points</span>
-                    <span class="status-value" id="dataPoints">--</span>
+        <div class="chart-container">
+            <div class="chart-wrapper">
+                <canvas id="priceChart"></canvas>
+            </div>
+            
+            <!-- Time Range Controls -->
+            <div class="controls">
+                <div class="btn-group">
+                    <button onclick="loadPrices('1m')" class="btn btn-secondary" data-range="1m">1 Minute</button>
+                    <button onclick="loadPrices('1w')" class="btn btn-secondary" data-range="1w">1 Week</button>
+                    <button onclick="loadPrices('today')" class="btn btn-secondary" data-range="today">Today</button>
+                    <button onclick="loadPrices('6m')" class="btn btn-secondary active" data-range="6m">6 Months</button>
+                    <button onclick="loadPrices('1y')" class="btn btn-secondary" data-range="1y">1 Year</button>
+                    <button onclick="loadPrices('5y')" class="btn btn-secondary" data-range="5y">5 Years</button>
+                    <button onclick="loadPrices('total')" class="btn btn-secondary" data-range="total">All Data</button>
                 </div>
             </div>
         </div>
 
-        <script>
-            // Global variables
-            let chart;
-            let currentRange = '1y';
-            let chartData = { prices: [], labels: [] };
-            let lastPrice = 42.50;
-            let priceHistory = [];
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-label">Status</div>
+                <div class="status-value" id="status">Ready</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Last Update</div>
+                <div class="status-value" id="lastUpdate">--</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Volume</div>
+                <div class="status-value" id="volume">--</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">High (24h)</div>
+                <div class="status-value" id="high24h">--</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Low (24h)</div>
+                <div class="status-value" id="low24h">--</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Data Points</div>
+                <div class="status-value" id="dataPoints">0</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Range</div>
+                <div class="status-value" id="currentRange">6 Months</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Ensure Chart.js is loaded before proceeding
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js failed to load from CDN!');
+        } else {
+            console.log('Chart.js loaded successfully:', Chart.version);
+        }
+        // Global variables
+        let chart;
+        let price = 40;
+        let chartData = { prices: [], labels: [] };
+        let originalData = { prices: [], labels: [] }; // Store original data for range switching
+        let currentRange = '6m';
+
+        // Initialize Chart.js with stable configuration (exact copy from graph.blade.php)
+        function initializeChart() {
+            const ctx = document.getElementById('priceChart').getContext('2d');
             
-            // Initialize Chart.js with advanced configuration
-            function initializeChart() {
-                const ctx = document.getElementById('priceChart').getContext('2d');
+            // Ensure we have a clean context
+            if (!ctx) {
+                console.error('Canvas context not found!');
+                return;
+            }
+            
+            // Create gradient for line - ensuring it's created fresh each time
+            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(96, 165, 250, 0.8)');
+            gradient.addColorStop(0.5, 'rgba(52, 211, 153, 0.4)');
+            gradient.addColorStop(1, 'rgba(52, 211, 153, 0)');
+            
+            console.log('Initializing chart with blue gradient...');
+            
+            // Destroy existing chart if it exists
+            if (chart) {
+                chart.destroy();
+            }
+            
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Price',
+                        data: [],
+                        borderColor: '#60a5fa',
+                        backgroundColor: gradient,
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 6,
+                        pointHoverBackgroundColor: '#60a5fa',
+                        pointHoverBorderColor: '#ffffff',
+                        pointHoverBorderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    animation: {
+                        duration: 0 // Disable animations to prevent zoom issues
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            position: 'right',
+                            beginAtZero: false,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#94a3b8',
+                                padding: 10,
+                                callback: function(value) {
+                                    return '$' + value.toFixed(2);
+                                }
+                            },
+                            title: {
+                                display: false
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#94a3b8',
+                                maxTicksLimit: 10
+                            },
+                            title: {
+                                display: false
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            enabled: true,
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#ffffff',
+                            bodyColor: '#94a3b8',
+                            borderColor: '#60a5fa',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            displayColors: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Price: $' + context.parsed.y.toFixed(2);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            console.log('Chart initialized successfully with dataset:', chart.data.datasets[0]);
+            
+            // Force update the chart colors to ensure they're blue, not red
+            chart.data.datasets[0].borderColor = '#60a5fa';
+            chart.data.datasets[0].backgroundColor = gradient;
+            chart.update('none');
+        }
+        
+        // Update chart data without causing zoom
+        function updateChartData(prices, labels, maintainScale = false) {
+            if (!chart || !prices || prices.length === 0) return;
+            
+            // Only recalculate Y-axis bounds if NOT maintaining scale
+            // This prevents zoom when adding real-time data
+            if (!maintainScale) {
+                const minVal = Math.min(...prices);
+                const maxVal = Math.max(...prices);
+                const padding = (maxVal - minVal) * 0.15; // 15% padding
                 
-                // Create gradient for line
+                // Only update scale if values are valid
+                if (isFinite(minVal) && isFinite(maxVal) && minVal !== maxVal) {
+                    chart.options.scales.y.min = Math.max(0, minVal - padding);
+                    chart.options.scales.y.max = maxVal + padding;
+                    console.log('Updated Y-axis scale:', chart.options.scales.y.min, 'to', chart.options.scales.y.max);
+                }
+            } else {
+                console.log('Maintaining current Y-axis scale to prevent zoom');
+            }
+            
+            // Update data
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = prices;
+            
+            // Force blue colors (prevent red line issue)
+            chart.data.datasets[0].borderColor = '#60a5fa';
+            if (chart.data.datasets[0].backgroundColor && typeof chart.data.datasets[0].backgroundColor === 'object') {
+                // Keep gradient
+            } else {
+                // Recreate gradient if lost
+                const ctx = chart.canvas.getContext('2d');
                 const gradient = ctx.createLinearGradient(0, 0, 0, 400);
                 gradient.addColorStop(0, 'rgba(96, 165, 250, 0.8)');
                 gradient.addColorStop(0.5, 'rgba(52, 211, 153, 0.4)');
                 gradient.addColorStop(1, 'rgba(52, 211, 153, 0)');
-                
-                chart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: [],
-                        datasets: [{
-                            label: 'Price',
-                            data: [],
-                            borderColor: '#60a5fa',
-                            backgroundColor: gradient,
-                            borderWidth: 3,
-                            fill: true,
-                            tension: 0.4,
-                            pointRadius: 0,
-                            pointHoverRadius: 8,
-                            pointHoverBackgroundColor: '#60a5fa',
-                            pointHoverBorderColor: '#ffffff',
-                            pointHoverBorderWidth: 2
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        interaction: {
-                            intersect: false,
-                            mode: 'index'
-                        },
-                        animation: {
-                            duration: 750,
-                            easing: 'easeInOutQuart'
-                        },
-                        scales: {
-                            y: {
-                                type: 'linear',
-                                position: 'right',
-                                grid: {
-                                    color: 'rgba(255, 255, 255, 0.1)',
-                                    drawBorder: false
-                                },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    padding: 10,
-                                    callback: function(value) {
-                                        return '$' + value.toFixed(2);
-                                    }
-                                },
-                                title: {
-                                    display: false
-                                }
-                            },
-                            x: {
-                                grid: {
-                                    color: 'rgba(255, 255, 255, 0.05)',
-                                    drawBorder: false
-                                },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    maxTicksLimit: 8
-                                },
-                                title: {
-                                    display: false
-                                }
-                            }
-                        },
-                        plugins: {
-                            legend: {
-                                display: false
-                            },
-                            tooltip: {
-                                enabled: true,
-                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                                titleColor: '#ffffff',
-                                bodyColor: '#94a3b8',
-                                borderColor: '#60a5fa',
-                                borderWidth: 1,
-                                cornerRadius: 8,
-                                displayColors: false,
-                                callbacks: {
-                                    label: function(context) {
-                                        return 'Price: $' + context.parsed.y.toFixed(2);
-                                    }
-                                }
-                            }
-                        },
-                        elements: {
-                            line: {
-                                borderCapStyle: 'round',
-                                borderJoinStyle: 'round'
-                            }
-                        }
-                    }
-                });
+                chart.data.datasets[0].backgroundColor = gradient;
             }
             
-            // Update active time filter button
-            function updateActiveFilter(selectedRange) {
-                document.querySelectorAll('.time-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                    if (btn.getAttribute('data-range') === selectedRange) {
-                        btn.classList.add('active');
-                    }
-                });
-            }
-            
-            // Show loading state
-            function showLoading() {
-                document.getElementById('chartLoading').style.display = 'flex';
-            }
-            
-            // Hide loading state
-            function hideLoading() {
-                document.getElementById('chartLoading').style.display = 'none';
-            }
-            
-            // Update price information in header
-            function updatePriceInfo(currentPrice, previousPrice = null) {
-                const priceElement = document.getElementById('currentPrice');
-                const changeElement = document.getElementById('priceChange');
-                
-                priceElement.textContent = '$' + currentPrice.toFixed(2);
-                
-                if (previousPrice !== null) {
-                    const change = ((currentPrice - previousPrice) / previousPrice * 100);
-                    const isPositive = change >= 0;
-                    
-                    changeElement.className = `price-change ${isPositive ? 'positive' : 'negative'}`;
-                    changeElement.innerHTML = `
-                        <span>${isPositive ? '+' : ''}${change.toFixed(2)}%</span>
-                        <span>${isPositive ? '↗' : '↘'}</span>
-                    `;
-                }
-            }
-            
-            // Update status bar information
-            function updateStatusBar(data) {
-                if (data.prices && data.prices.length > 0) {
-                    const prices = data.prices;
-                    const high = Math.max(...prices);
-                    const low = Math.min(...prices);
-                    
-                    document.getElementById('high24h').textContent = '$' + high.toFixed(2);
-                    document.getElementById('low24h').textContent = '$' + low.toFixed(2);
-                    document.getElementById('dataPoints').textContent = prices.length.toLocaleString();
-                    document.getElementById('volume').textContent = (prices.length * 1000).toLocaleString();
-                }
-                
-                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
-            }
-            
-            // Apply filters to chart data
-            function applyFilters() {
-                const minPrice = parseFloat(document.getElementById('minPriceFilter').value);
-                const maxPrice = parseFloat(document.getElementById('maxPriceFilter').value);
-                const interval = document.getElementById('intervalFilter').value;
-                
-                let filteredData = [...chartData.prices];
-                let filteredLabels = [...chartData.labels];
-                
-                // Apply price filters
-                if (!isNaN(minPrice) || !isNaN(maxPrice)) {
-                    const filtered = filteredData.map((price, index) => {
-                        const withinMin = isNaN(minPrice) || price >= minPrice;
-                        const withinMax = isNaN(maxPrice) || price <= maxPrice;
-                        return withinMin && withinMax ? { price, label: filteredLabels[index], index } : null;
-                    }).filter(item => item !== null);
-                    
-                    filteredData = filtered.map(item => item.price);
-                    filteredLabels = filtered.map(item => item.label);
-                }
-                
-                // Apply interval filter
-                if (interval !== 'all' && filteredData.length > 0) {
-                    const step = getIntervalStep(interval, filteredData.length);
-                    if (step > 1) {
-                        const sampledData = [];
-                        const sampledLabels = [];
-                        for (let i = 0; i < filteredData.length; i += step) {
-                            sampledData.push(filteredData[i]);
-                            sampledLabels.push(filteredLabels[i]);
-                        }
-                        filteredData = sampledData;
-                        filteredLabels = sampledLabels;
-                    }
-                }
-                
-                // Update chart with filtered data
-                updateChartData(filteredData, filteredLabels);
-            }
-            
-            // Get interval step for data sampling
-            function getIntervalStep(interval, dataLength) {
-                const targetPoints = {
-                    '1min': 100,
-                    '5min': 200,
-                    '1hour': 300,
-                    '1day': 50
-                };
-                
-                const target = targetPoints[interval] || dataLength;
-                return Math.max(1, Math.floor(dataLength / target));
-            }
-            
-            // Update chart data without zooming/jumping
-            function updateChartData(prices, labels, animate = true) {
-                if (!chart) return;
-                
-                // Calculate appropriate Y-axis bounds with padding
-                const minPrice = Math.min(...prices);
-                const maxPrice = Math.max(...prices);
-                const padding = (maxPrice - minPrice) * 0.1; // 10% padding
-                
-                chart.options.scales.y.min = Math.max(0, minPrice - padding);
-                chart.options.scales.y.max = maxPrice + padding;
-                
-                // Update data
-                chart.data.labels = labels;
-                chart.data.datasets[0].data = prices;
-                
-                // Update chart smoothly without zoom
-                chart.update(animate ? 'active' : 'none');
-            }
-            
-            // Load prices from server
-            function loadPrices(range) {
-                if (range === currentRange) return; // Don't reload same data
-                
-                showLoading();
-                currentRange = range;
-                updateActiveFilter(range);
-                
-                fetch(`/prices?range=${range}`)
-                    .then(response => {
-                        if (!response.ok) throw new Error('Network response was not ok');
-                        return response.json();
-                    })
-                    .then(data => {
-                        chartData = {
-                            prices: data.prices || [],
-                            labels: data.labels || []
-                        };
-                        
-                        // Update price info if we have data
-                        if (data.prices && data.prices.length > 0) {
-                            const latestPrice = data.prices[data.prices.length - 1];
-                            const previousPrice = data.prices.length > 1 ? data.prices[data.prices.length - 2] : null;
-                            updatePriceInfo(latestPrice, previousPrice);
-                            lastPrice = latestPrice;
-                        }
-                        
-                        updateStatusBar(data);
-                        applyFilters(); // This will update the chart
-                        hideLoading();
-                    })
-                    .catch(error => {
-                        console.error('Error loading prices:', error);
-                        hideLoading();
-                        // Show error in status
-                        document.getElementById('lastUpdate').textContent = 'Error loading data';
-                    });
-            }
-            
-            // WebSocket connection status
-            function updateWebSocketStatus(connected) {
-                const indicator = document.getElementById('wsIndicator');
-                const status = document.getElementById('wsStatus');
-                
-                if (connected) {
-                    indicator.classList.remove('disconnected');
-                    status.textContent = 'Connected';
-                } else {
-                    indicator.classList.add('disconnected');
-                    status.textContent = 'Disconnected';
-                }
-            }
-            
-            // Initialize everything when page loads
-            document.addEventListener('DOMContentLoaded', function() {
-                initializeChart();
-                loadPrices(currentRange);
-                
-                // Add event listeners for filters
-                document.getElementById('minPriceFilter').addEventListener('change', applyFilters);
-                document.getElementById('maxPriceFilter').addEventListener('change', applyFilters);
-                document.getElementById('intervalFilter').addEventListener('change', applyFilters);
-                
-                // Initialize WebSocket connection
-                try {
-                    window.Echo.channel('test')
-                        .listen('Tutorial', (event) => {
-                            console.log('Received WebSocket event:', event);
-                            
-                            // Extract numeric value from the message
-                            let value = null;
-                            if (event.message && typeof event.message === 'string') {
-                                const match = event.message.match(/\d+(\.\d+)?/);
-                                if (match) {
-                                    value = parseFloat(match[0]);
-                                }
-                            }
-                            
-                            if (value !== null && !isNaN(value)) {
-                                // Store in price history
-                                priceHistory.push({
-                                    price: value,
-                                    timestamp: new Date()
-                                });
-                                
-                                // Keep only last 100 real-time updates
-                                if (priceHistory.length > 100) {
-                                    priceHistory.shift();
-                                }
-                                
-                                // Update UI with new price
-                                updatePriceInfo(value, lastPrice);
-                                lastPrice = value;
-                                
-                                // If we're viewing real-time data (1m range), update chart
-                                if (currentRange === '1m') {
-                                    // Add new point to current data
-                                    const newLabel = new Date().toLocaleTimeString();
-                                    chartData.prices.push(value);
-                                    chartData.labels.push(newLabel);
-                                    
-                                    // Keep only recent data points for 1m view
-                                    if (chartData.prices.length > 50) {
-                                        chartData.prices.shift();
-                                        chartData.labels.shift();
-                                    }
-                                    
-                                    applyFilters();
-                                }
-                            }
-                        })
-                        .subscribed(() => {
-                            console.log('Subscribed to test channel');
-                            updateWebSocketStatus(true);
-                        })
-                        .error((error) => {
-                            console.error('WebSocket error:', error);
-                            updateWebSocketStatus(false);
-                        });
-                } catch (error) {
-                    console.error('Failed to initialize WebSocket:', error);
-                    updateWebSocketStatus(false);
+            // Update chart without animation to prevent zoom
+            chart.update('none');
+        }
+        
+        // Update active button style
+        function updateActiveButton(selectedRange) {
+            document.querySelectorAll('[data-range]').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.getAttribute('data-range') === selectedRange) {
+                    btn.classList.add('active');
                 }
             });
-        </script>
-    </body>
+            
+            const rangeNames = {
+                '1m': '1 Minute',
+                '1w': '1 Week', 
+                'today': 'Today',
+                '6m': '6 Months',
+                '1y': '1 Year',
+                '5y': '5 Years',
+                'total': 'All Data'
+            };
+            document.getElementById('currentRange').textContent = rangeNames[selectedRange] || selectedRange;
+        }
+        
+        // Update price display
+        function updatePriceDisplay(newPrice, oldPrice = null) {
+            document.getElementById('currentPriceDisplay').textContent = '$' + newPrice.toFixed(2);
+            
+            const directionElement = document.getElementById('direction');
+            if (oldPrice !== null && newPrice !== oldPrice) {
+                const isUp = newPrice > oldPrice;
+                directionElement.textContent = isUp ? 'Up ↗' : 'Down ↘';
+                directionElement.className = 'direction ' + (isUp ? 'up' : 'down');
+            } else {
+                directionElement.textContent = '-';
+                directionElement.className = 'direction';
+            }
+        }
+
+        // WebSocket connection status
+        function updateWebSocketStatus(connected) {
+            const indicator = document.getElementById('wsIndicator');
+            const status = document.getElementById('wsStatus');
+            
+            if (connected) {
+                indicator.classList.remove('disconnected');
+                status.textContent = 'Connected';
+                document.getElementById('status').textContent = 'Ready';
+            } else {
+                indicator.classList.add('disconnected');
+                status.textContent = 'Disconnected';
+                document.getElementById('status').textContent = 'Disconnected';
+            }
+        }
+
+        // Load prices for different time ranges
+        function loadPrices(range) {
+            if (range === currentRange && originalData.prices.length > 0) {
+                return; // Don't reload same data unnecessarily
+            }
+            
+            console.log('Loading prices for range:', range);
+            document.getElementById('status').textContent = 'Loading...';
+            
+            // Update current range BEFORE making the request to prevent race conditions
+            const previousRange = currentRange;
+            currentRange = range;
+            updateActiveButton(range);
+
+            fetch(`/prices?range=${range}`)
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed to load data');
+                    return response.json();
+                })
+                .then(data => {
+                    // Store original data
+                    originalData = {
+                        prices: data.prices || [],
+                        labels: data.labels || []
+                    };
+                    
+                    // Update chart data
+                    chartData = { ...originalData };
+                    
+                    if (chartData.prices.length > 0) {
+                        // Update price display with latest price
+                        const latestPrice = chartData.prices[chartData.prices.length - 1];
+                        const previousPrice = chartData.prices.length > 1 ? chartData.prices[chartData.prices.length - 2] : null;
+                        updatePriceDisplay(latestPrice, previousPrice);
+                        price = latestPrice; // Update current price
+                    }
+                    
+                    // Use maintainScale = false for historical data to set proper Y-axis bounds
+                    updateChartData(chartData.prices, chartData.labels, false);
+                    document.getElementById('dataPoints').textContent = chartData.prices.length.toLocaleString();
+                    
+                    // Update status bar
+                    if (chartData.prices.length > 0) {
+                        const prices = chartData.prices;
+                        const high = Math.max(...prices);
+                        const low = Math.min(...prices);
+                        
+                        document.getElementById('high24h').textContent = '$' + high.toFixed(2);
+                        document.getElementById('low24h').textContent = '$' + low.toFixed(2);
+                        document.getElementById('volume').textContent = (prices.length * 1000).toLocaleString();
+                    }
+                    
+                    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+                    document.getElementById('status').textContent = 'Ready';
+                })
+                .catch(error => {
+                    console.error('Error loading prices:', error);
+                    document.getElementById('lastUpdate').textContent = 'Load error';
+                    document.getElementById('status').textContent = 'Error';
+                });
+        }
+
+        // Initialize everything when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Ensure no conflicting chart instances exist
+            const existingCharts = Chart.getChart('priceChart');
+            if (existingCharts) {
+                console.log('Destroying existing chart instance...');
+                existingCharts.destroy();
+            }
+            
+            initializeChart();
+            loadPrices(currentRange); // Load default range (6m)
+            
+            // Initialize WebSocket connection
+            setTimeout(() => {
+                initializeWebSocket();
+            }, 1000);
+        });
+        
+        function initializeWebSocket() {
+            console.log('Initializing WebSocket connection...');
+            
+            if (typeof window.Echo === 'undefined') {
+                console.error('Laravel Echo is not available.');
+                updateWebSocketStatus(false);
+                return;
+            }
+            
+            try {
+                // Add connection status listeners
+                if (window.Echo.connector && window.Echo.connector.pusher) {
+                    window.Echo.connector.pusher.connection.bind('connected', () => {
+                        console.log('✅ WebSocket connected successfully!');
+                        updateWebSocketStatus(true);
+                    });
+                    
+                    window.Echo.connector.pusher.connection.bind('disconnected', () => {
+                        console.log('🔥 WebSocket disconnected');
+                        updateWebSocketStatus(false);
+                    });
+                }
+                
+                window.Echo.channel('test')
+                    .listen('Tutorial', (event) => {
+                        console.log('Received WebSocket event:', event, 'Current range:', currentRange);
+                        
+                        // Extract numeric value from the message
+                        let value = null;
+                        if (event.message && typeof event.message === 'string') {
+                            const match = event.message.match(/\d+(\.\d+)?/);
+                            if (match) {
+                                value = parseFloat(match[0]);
+                            }
+                        }
+                        
+                        if (value !== null && !isNaN(value)) {
+                            // Always update price display (top of page)
+                            updatePriceDisplay(value, price);
+                            price = value;
+                            
+                            // ONLY update chart data if we're viewing 1 Minute range
+                            // This prevents zoom issues on other time ranges
+                            if (currentRange === '1m') {
+                                console.log('Adding real-time data point to 1m chart:', value);
+                                chartData.prices.push(value);
+                                chartData.labels.push(new Date().toLocaleTimeString());
+                                
+                                // Keep only last 50 points for 1m view
+                                if (chartData.prices.length > 50) {
+                                    chartData.prices.shift();
+                                    chartData.labels.shift();
+                                }
+                                
+                                // Update chart with maintained scale to prevent zoom
+                                updateChartData(chartData.prices, chartData.labels, true);
+                                document.getElementById('dataPoints').textContent = chartData.prices.length.toLocaleString();
+                            } else {
+                                console.log('Real-time data received but not updating chart (current range:', currentRange, ')');
+                            }
+                            
+                            // Always update last update time
+                            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+                        }
+                    })
+                    .subscribed(() => {
+                        console.log('✅ Successfully subscribed to test channel');
+                        updateWebSocketStatus(true);
+                    })
+                    .error((error) => {
+                        console.error('❌ WebSocket subscription error:', error);
+                        updateWebSocketStatus(false);
+                    });
+                    
+            } catch (error) {
+                console.error('❌ Failed to initialize WebSocket:', error);
+                updateWebSocketStatus(false);
+            }
+        }
+    </script>
+</body>
 </html>

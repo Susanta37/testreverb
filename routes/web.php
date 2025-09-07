@@ -71,3 +71,18 @@ Route::post('/update-chart-data', function (Request $request) {
     
     return response()->json(['status' => 'Invalid data'], 400);
 });
+
+// Test WebSocket route
+Route::get('/test-websocket', function () {
+    $price = rand(30, 80);
+    $message = "Price: $price";
+    
+    broadcast(new Tutorial($message));
+    Log::info("Test WebSocket message sent: $message");
+    
+    return response()->json([
+        'status' => 'Test message sent',
+        'message' => $message,
+        'price' => $price
+    ]);
+});
