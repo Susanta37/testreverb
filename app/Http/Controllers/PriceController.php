@@ -44,13 +44,19 @@ class PriceController extends Controller
 
         switch ($range) {
             case '1m':
-                $query->where('created_at', '>=', Carbon::now()->subMonth());
+                $query->where('created_at', '>=', Carbon::now()->subMinute());
+                break;
+            case '1w':
+                $query->where('created_at', '>=', Carbon::now()->subWeek());
                 break;
             case '6m':
                 $query->where('created_at', '>=', Carbon::now()->subMonths(6));
                 break;
             case '1y':
                 $query->where('created_at', '>=', Carbon::now()->subYear());
+                break;
+            case '5y':
+                $query->where('created_at', '>=', Carbon::now()->subYears(5));
                 break;
             case 'today':
                 $query->whereDate('created_at', Carbon::today());
@@ -62,10 +68,36 @@ class PriceController extends Controller
         }
 
         $prices = $query->orderBy('created_at')->get(['price', 'created_at']);
+        
+        // Calculate min and max prices for chart scaling
+        $priceValues = $prices->pluck('price');
+        $minPrice = $priceValues->min() ?? 0;
+        $maxPrice = $priceValues->max() ?? 100;
+        
+        // Format labels based on time range
+        $formattedLabels = $prices->pluck('created_at')->map(function($date) use ($range) {
+            switch ($range) {
+                case '1m':
+                    return $date->format('H:i:s');
+                case '1w':
+                case 'today':
+                    return $date->format('H:i');
+                case '6m':
+                case '1y':
+                case '5y':
+                    return $date->format('M d');
+                case 'total':
+                default:
+                    return $date->format('Y-m-d H:i');
+            }
+        });
 
         return response()->json([
-            'prices' => $prices->pluck('price'),
-            'labels' => $prices->pluck('created_at')->map(fn($date) => $date->toDateTimeString()),
+            'prices' => $priceValues,
+            'labels' => $formattedLabels,
+            'minPrice' => $minPrice,
+            'maxPrice' => $maxPrice,
+            'count' => $prices->count()
         ]);
     }
 }
